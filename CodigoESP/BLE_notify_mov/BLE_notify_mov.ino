@@ -95,11 +95,8 @@ void loop() {
         pCharacteristic->setValue("Movim. detectada!");
         pCharacteristic->notify();
         delay(1000);
-      }
-      else {
-        pCharacteristic->setValue("safe");
+        pCharacteristic->setValue("");
         pCharacteristic->notify();
-        delay(1000);
       }
     }
     if (!deviceConnected && oldDeviceConnected) {
