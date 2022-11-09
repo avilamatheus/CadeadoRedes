@@ -13,6 +13,8 @@ BLEServer* pServer = NULL;
 BLECharacteristic* pCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
+bool moniStarted = false;
+bool adver = false;
 uint32_t value = 0;
 
 // See the following for generating UUIDs:
@@ -24,10 +26,13 @@ uint32_t value = 0;
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
+      Serial.println("Dispositivo conectado!");      
       deviceConnected = true;
     };
 
     void onDisconnect(BLEServer* pServer) {
+      Serial.println("Dispositivo desconectado!");
+      adver = false;
       deviceConnected = false;
     }
 };
@@ -45,6 +50,8 @@ void setup() {
   }
   Serial.println("MPU6050 Found!");
 
+  pinMode(5, INPUT);
+
   //setup motion detection
   mpu.setHighPassFilter(MPU6050_HIGHPASS_0_63_HZ);
   mpu.setMotionDetectionThreshold(5); //Accelerometer sensitivity to motion
@@ -53,7 +60,7 @@ void setup() {
   mpu.setInterruptPinPolarity(true);
   mpu.setMotionInterrupt(true);
 
-  // Create the BLE Device
+    // Create the BLE Device
   BLEDevice::init("ESP32-Cadeado");
 
   // Create the BLE Server
@@ -84,29 +91,44 @@ void setup() {
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(false);
   pAdvertising->setMinPreferred(0x0);  // set value to 0x00 to not advertise this parameter
-  BLEDevice::startAdvertising();
-  Serial.println("Waiting a client connection to notify...");
 }
 
 void loop() {
-    // notify changed value
-    if (deviceConnected) {
-      if(mpu.getMotionInterruptStatus()) {
+  if(isLocked()) {
+    if(adver == false) {
+      pServer->startAdvertising();
+      adver = true;
+    }
+    if(!moniStarted && deviceConnected){
+      moniStarted = true;
+      Serial.println("Monit. iniciado");
+    }
+    if(mpu.getMotionInterruptStatus()) {
         pCharacteristic->setValue("Movim. detectada!");
+        Serial.println("Movim. detectada!");
         pCharacteristic->notify();
         delay(1000);
         pCharacteristic->setValue("");
         pCharacteristic->notify();
-      }
     }
-    if (!deviceConnected && oldDeviceConnected) {
-        delay(500);
-        pServer->startAdvertising();
-        Serial.println("dispositivo reconectado");
-        oldDeviceConnected = deviceConnected;
+  } else if (moniStarted && !isLocked()){
+    Serial.println("Monit. finalizado");    
+    moniStarted = false;
+  } else if (!isLocked() && adver == true) {
+    pServer->getAdvertising()->stop();
+    adver = false;
+  } else {
+    moniStarted = false;
+  }
+}
+
+bool isLocked() {
+    int chave = 0;
+    chave = digitalRead(5);
+    if(chave == 1){
+      return true;
     }
-    if (deviceConnected && !oldDeviceConnected) {
-        Serial.println("Monitoramento iniciado");
-        oldDeviceConnected = deviceConnected;
+    else {
+      return false;
     }
 }
